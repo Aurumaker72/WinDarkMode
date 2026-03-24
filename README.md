@@ -2,7 +2,7 @@
 > This library is not production-ready.
 > It's lacking essential functionality, but it's also being worked on actively.
 > 
-> Check back later! 
+> Check back later!
 
 # WinDarkMode
 
@@ -52,3 +52,41 @@ WinDarkMode supports attaching to both top-level windows and dialogs.
 To attach to a dialog, you still call `WinDarkMode::attach(hwnd);`, but preferrably on `WM_INITDIALOG`. 
 
 `WM_CREATE` should work too, but is less common.
+
+## Milestones
+
+For those who are interested, here are some feature milestones:
+
+- Control and library support
+  - [ ] Animation
+  - [ ] Button
+  - [ ] ComboBox
+  - [ ] ComboBoxEx
+  - [ ] Date and Time Picker
+  - [ ] Edit
+  - [ ] Flat Scroll Bar
+  - [ ] Header Control
+  - [ ] Hot Key
+  - [ ] Image List
+  - [ ] IP Address Control
+  - [ ] List Box
+  - [ ] List View
+  - [ ] Month Calendar
+  - [ ] Pager
+  - [ ] Progress Bar
+  - [ ] Property Sheet
+  - [ ] Rebar
+  - [ ] Rich Edit
+  - [ ] Scroll Bar
+  - [ ] Static Control
+  - [ ] Status Bar
+  - [ ] SysLink
+  - [ ] Tab
+  - [ ] Task Dialog
+  - [ ] Toolbar
+  - [ ] Tooltip
+  - [ ] Trackbar
+  - [ ] Tree View
+  - [ ] Up-Down Control
+- Automatically react to theme change
+- Allow specifying dark mode syncing behavior: system/force light/force dark
