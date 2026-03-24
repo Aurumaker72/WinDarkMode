@@ -1,3 +1,9 @@
+> [!WARNING]
+> This library is not production-ready.
+> It's lacking essential functionality, but it's also being worked on actively.
+> 
+> Check back later! 
+
 # WinDarkMode
 
 Single-header Win32 dark mode library with a sane and modern API surface based on [win32-darkmode](https://github.com/ysc3839/win32-darkmode).
