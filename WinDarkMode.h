@@ -6,12 +6,16 @@
 
 /*
  * WinDarkMode 0.0.1
+ * https://github.com/Aurumaker72/WinDarkMode
  * Single-header Win32 dark mode library with a sane and modern API surface.
  * Based on https://github.com/ysc3839/win32-darkmode and
  * https://github.com/stevemk14ebr/PolyHook_2_0/blob/master/sources/IatHook.cpp.
  */
 
 /*
+ *
+ * Based on the MIT-licensed work by Richard Yu:
+ *
  * MIT License
  *
  * Copyright (c) 2019 Richard Yu
