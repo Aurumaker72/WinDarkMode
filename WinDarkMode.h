@@ -45,6 +45,7 @@
 #include <Uxtheme.h>
 #include <commdlg.h>
 #include <Vssym32.h>
+#include <dwmapi.h>
 #include <winerror.h>
 #include <cstdint>
 #include <string>
@@ -391,8 +392,8 @@ inline void InitListView(HWND lv_hwnd)
     // FIXME: Hide focus rectangle because it's white :/ Would be nice to override it instead.
     SendMessage(lv_hwnd, WM_CHANGEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
 
-    SetWindowTheme(hdr_hwnd, L"ItemsView", nullptr);
-    SetWindowTheme(lv_hwnd, L"ItemsView", nullptr);
+    SetWindowTheme(hdr_hwnd, L"ItemsView", L"Header");
+    SetWindowTheme(lv_hwnd, L"ItemsView", 0);
 }
 
 inline bool SetDarkThemeColors(HBRUSH &bg_brush, HDC hdc)
@@ -467,50 +468,48 @@ inline void init()
     using namespace Internal;
     auto RtlGetNtVersionNumbers = reinterpret_cast<fnRtlGetNtVersionNumbers>(
         GetProcAddress(GetModuleHandle(L"ntdll.dll"), "RtlGetNtVersionNumbers"));
-    if (RtlGetNtVersionNumbers)
+    if (!RtlGetNtVersionNumbers) return;
+
+    DWORD major, minor;
+    RtlGetNtVersionNumbers(&major, &minor, &build_number);
+    build_number &= ~0xF0000000;
+
+    HMODULE hUxtheme = LoadLibraryEx(L"uxtheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (hUxtheme)
     {
-        DWORD major, minor;
-        RtlGetNtVersionNumbers(&major, &minor, &build_number);
-        build_number &= ~0xF0000000;
+        _OpenNcThemeData = reinterpret_cast<fnOpenNcThemeData>(GetProcAddress(hUxtheme, MAKEINTRESOURCEA(49)));
+        _RefreshImmersiveColorPolicyState =
+            reinterpret_cast<fnRefreshImmersiveColorPolicyState>(GetProcAddress(hUxtheme, MAKEINTRESOURCEA(104)));
+        _GetIsImmersiveColorUsingHighContrast =
+            reinterpret_cast<fnGetIsImmersiveColorUsingHighContrast>(GetProcAddress(hUxtheme, MAKEINTRESOURCEA(106)));
+        _ShouldAppsUseDarkMode =
+            reinterpret_cast<fnShouldAppsUseDarkMode>(GetProcAddress(hUxtheme, MAKEINTRESOURCEA(132)));
+        _AllowDarkModeForWindow =
+            reinterpret_cast<fnAllowDarkModeForWindow>(GetProcAddress(hUxtheme, MAKEINTRESOURCEA(133)));
 
-        HMODULE hUxtheme = LoadLibraryEx(L"uxtheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-        if (hUxtheme)
+        auto ord135 = GetProcAddress(hUxtheme, MAKEINTRESOURCEA(135));
+        if (build_number < 18362)
+            _AllowDarkModeForApp = reinterpret_cast<fnAllowDarkModeForApp>(ord135);
+        else
+            _SetPreferredAppMode = reinterpret_cast<fnSetPreferredAppMode>(ord135);
+
+        _IsDarkModeAllowedForWindow =
+            reinterpret_cast<fnIsDarkModeAllowedForWindow>(GetProcAddress(hUxtheme, MAKEINTRESOURCEA(137)));
+
+        _SetWindowCompositionAttribute = reinterpret_cast<fnSetWindowCompositionAttribute>(
+            GetProcAddress(GetModuleHandle(L"user32.dll"), "SetWindowCompositionAttribute"));
+
+        if (_OpenNcThemeData && _RefreshImmersiveColorPolicyState && _ShouldAppsUseDarkMode &&
+            _AllowDarkModeForWindow && (_AllowDarkModeForApp || _SetPreferredAppMode) && _IsDarkModeAllowedForWindow)
         {
-            _OpenNcThemeData = reinterpret_cast<fnOpenNcThemeData>(GetProcAddress(hUxtheme, MAKEINTRESOURCEA(49)));
-            _RefreshImmersiveColorPolicyState =
-                reinterpret_cast<fnRefreshImmersiveColorPolicyState>(GetProcAddress(hUxtheme, MAKEINTRESOURCEA(104)));
-            _GetIsImmersiveColorUsingHighContrast = reinterpret_cast<fnGetIsImmersiveColorUsingHighContrast>(
-                GetProcAddress(hUxtheme, MAKEINTRESOURCEA(106)));
-            _ShouldAppsUseDarkMode =
-                reinterpret_cast<fnShouldAppsUseDarkMode>(GetProcAddress(hUxtheme, MAKEINTRESOURCEA(132)));
-            _AllowDarkModeForWindow =
-                reinterpret_cast<fnAllowDarkModeForWindow>(GetProcAddress(hUxtheme, MAKEINTRESOURCEA(133)));
+            dark_mode_supported = true;
 
-            auto ord135 = GetProcAddress(hUxtheme, MAKEINTRESOURCEA(135));
-            if (build_number < 18362)
-                _AllowDarkModeForApp = reinterpret_cast<fnAllowDarkModeForApp>(ord135);
-            else
-                _SetPreferredAppMode = reinterpret_cast<fnSetPreferredAppMode>(ord135);
+            AllowDarkModeForApp(true);
+            _RefreshImmersiveColorPolicyState();
 
-            _IsDarkModeAllowedForWindow =
-                reinterpret_cast<fnIsDarkModeAllowedForWindow>(GetProcAddress(hUxtheme, MAKEINTRESOURCEA(137)));
+            dark_mode_enabled = _ShouldAppsUseDarkMode() && !IsHighContrast();
 
-            _SetWindowCompositionAttribute = reinterpret_cast<fnSetWindowCompositionAttribute>(
-                GetProcAddress(GetModuleHandle(L"user32.dll"), "SetWindowCompositionAttribute"));
-
-            if (_OpenNcThemeData && _RefreshImmersiveColorPolicyState && _ShouldAppsUseDarkMode &&
-                _AllowDarkModeForWindow && (_AllowDarkModeForApp || _SetPreferredAppMode) &&
-                _IsDarkModeAllowedForWindow)
-            {
-                dark_mode_supported = true;
-
-                AllowDarkModeForApp(true);
-                _RefreshImmersiveColorPolicyState();
-
-                dark_mode_enabled = _ShouldAppsUseDarkMode() && !IsHighContrast();
-
-                FixDarkScrollBar();
-            }
+            FixDarkScrollBar();
         }
     }
 
@@ -531,8 +530,9 @@ inline void attach(HWND hwnd)
     if (!dark_mode_supported) return;
 
     _AllowDarkModeForWindow(hwnd, true);
+    DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark_mode_enabled, sizeof(dark_mode_enabled));
+
     RefreshTitleBarThemeColor(hwnd);
-    FixDarkScrollBar();
 
     // Visit all child windows and apply all the crappy hacks...
     EnumChildWindows(
