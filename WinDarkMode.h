@@ -410,6 +410,10 @@ inline void apply_to_control(HWND hwnd)
     GetClassName(hwnd, cls, std::size(cls));
     std::wstring class_name(cls);
 
+    // Don't touch the header, it's handled in InitListView.
+    // FIXME: Can standalone header controls exist? If so, this will break them.
+    if (class_name == WC_HEADER) return;
+
     if (class_name == WC_LISTVIEW)
     {
         InitListView(hwnd);
@@ -417,8 +421,7 @@ inline void apply_to_control(HWND hwnd)
     }
 
     _AllowDarkModeForWindow(hwnd, true);
-
-    if (class_name != WC_HEADER) SetWindowTheme(hwnd, L"Explorer", nullptr);
+    SetWindowTheme(hwnd, L"Explorer", nullptr);
 }
 
 inline void apply_to_child_windows(HWND hwnd)
@@ -501,6 +504,18 @@ inline bool is_top_level_window(HWND hwnd)
 }; // namespace Internal
 
 /**
+ * @brief Options for `attach`. See `attach` for details.
+ */
+struct AttachOptions
+{
+    /**
+     * @brief Whether the window is a dialog. This is used to apply some dialog-specific dark mode fixes. If
+     * unspecified, the function will attempt to determine it automatically.
+     */
+    std::optional<bool> is_dialog = std::nullopt;
+};
+
+/**
  * @brief Initializes dark mode support. Call this once at the start of your program, preferrably in `WinMain` before
  * creating any windows.
  */
@@ -562,9 +577,10 @@ inline void init()
 /**
  * @brief Attaches dark mode support to a window.
  * @param hwnd The handle to the window.
+ * @param options Options for attaching. See `AttachOptions` for details.
  * @remarks Adding, changing, or removing child windows after this call is not properly supported yet.
  */
-inline void attach(HWND hwnd)
+inline void attach(HWND hwnd, const AttachOptions &options = {})
 {
     using namespace Internal;
 
@@ -578,7 +594,9 @@ inline void attach(HWND hwnd)
     apply_to_child_windows(hwnd);
 
     SetWindowSubclass(hwnd, wnd_subclass_proc, 0, 0);
-    if (!is_top_level_window(hwnd)) SetWindowSubclass(hwnd, dlg_subclass_proc, 0, 0);
+
+    const bool is_dialog = options.is_dialog.value_or(!is_top_level_window(hwnd));
+    if (is_dialog) SetWindowSubclass(hwnd, dlg_subclass_proc, 0, 0);
 }
 
 } // namespace WinDarkMode
