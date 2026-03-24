@@ -1,0 +1,4 @@
+CompileFlags:
+  Add: ["/std:c++latest"]
+Completion:
+  HeaderInsertion: Never
