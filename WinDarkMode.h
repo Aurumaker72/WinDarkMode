@@ -314,84 +314,85 @@ inline void FixDarkScrollBar()
     }
 }
 
-inline void InitListView(HWND hListView)
+inline void InitListView(HWND lv_hwnd)
 {
-    HWND hHeader = ListView_GetHeader(hListView);
+    _AllowDarkModeForWindow(lv_hwnd, true);
 
-    _AllowDarkModeForWindow(hListView, true);
-    _AllowDarkModeForWindow(hHeader, true);
+    HWND hdr_hwnd = ListView_GetHeader(lv_hwnd);
+    _AllowDarkModeForWindow(hdr_hwnd, true);
 
-    SetWindowSubclass(
-        hListView,
-        [](HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR /*uIdSubclass*/,
-           DWORD_PTR dwRefData) -> LRESULT {
-            switch (uMsg)
+    const auto subclass = [](HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR /*uIdSubclass*/,
+                             DWORD_PTR dwRefData) -> LRESULT {
+        switch (uMsg)
+        {
+        case WM_NOTIFY: {
+            if (reinterpret_cast<LPNMHDR>(lParam)->code == NM_CUSTOMDRAW)
             {
-            case WM_NOTIFY: {
-                if (reinterpret_cast<LPNMHDR>(lParam)->code == NM_CUSTOMDRAW)
+                LPNMCUSTOMDRAW nmcd = reinterpret_cast<LPNMCUSTOMDRAW>(lParam);
+                switch (nmcd->dwDrawStage)
                 {
-                    LPNMCUSTOMDRAW nmcd = reinterpret_cast<LPNMCUSTOMDRAW>(lParam);
-                    switch (nmcd->dwDrawStage)
-                    {
-                    case CDDS_PREPAINT:
-                        return CDRF_NOTIFYITEMDRAW;
-                    case CDDS_ITEMPREPAINT: {
-                        auto info = reinterpret_cast<SubclassInfo *>(dwRefData);
-                        SetTextColor(nmcd->hdc, info->headerTextColor);
-                        return CDRF_DODEFAULT;
-                    }
-                    }
-                }
-            }
-            break;
-            case WM_THEMECHANGED: {
-                HWND hHeader = ListView_GetHeader(hWnd);
-                HTHEME hTheme = OpenThemeData(nullptr, L"ItemsView");
-                if (hTheme)
-                {
-                    COLORREF color;
-                    if (SUCCEEDED(GetThemeColor(hTheme, 0, 0, TMT_TEXTCOLOR, &color)))
-                    {
-                        ListView_SetTextColor(hWnd, color);
-                    }
-                    if (SUCCEEDED(GetThemeColor(hTheme, 0, 0, TMT_FILLCOLOR, &color)))
-                    {
-                        ListView_SetTextBkColor(hWnd, color);
-                        ListView_SetBkColor(hWnd, color);
-                    }
-                    CloseThemeData(hTheme);
-                }
-
-                hTheme = OpenThemeData(hHeader, L"Header");
-                if (hTheme)
-                {
+                case CDDS_PREPAINT:
+                    return CDRF_NOTIFYITEMDRAW;
+                case CDDS_ITEMPREPAINT: {
                     auto info = reinterpret_cast<SubclassInfo *>(dwRefData);
-                    GetThemeColor(hTheme, HP_HEADERITEM, 0, TMT_TEXTCOLOR, &(info->headerTextColor));
-                    CloseThemeData(hTheme);
+                    SetTextColor(nmcd->hdc, info->headerTextColor);
+                    return CDRF_DODEFAULT;
                 }
-
-                SendMessageW(hHeader, WM_THEMECHANGED, wParam, lParam);
-
-                RedrawWindow(hWnd, nullptr, nullptr, RDW_FRAME | RDW_INVALIDATE);
+                }
             }
-            break;
-            case WM_DESTROY: {
+        }
+        break;
+        case WM_THEMECHANGED: {
+            HWND hdr_hwnd = ListView_GetHeader(hWnd);
+            HTHEME hTheme = OpenThemeData(nullptr, L"ItemsView");
+            if (hTheme)
+            {
+                COLORREF color;
+                if (SUCCEEDED(GetThemeColor(hTheme, 0, 0, TMT_TEXTCOLOR, &color)))
+                {
+                    ListView_SetTextColor(hWnd, color);
+                }
+                if (SUCCEEDED(GetThemeColor(hTheme, 0, 0, TMT_FILLCOLOR, &color)))
+                {
+                    ListView_SetTextBkColor(hWnd, color);
+                    ListView_SetBkColor(hWnd, color);
+                }
+                CloseThemeData(hTheme);
+            }
+
+            hTheme = OpenThemeData(hdr_hwnd, L"Header");
+            if (hTheme)
+            {
                 auto info = reinterpret_cast<SubclassInfo *>(dwRefData);
-                delete info;
+                GetThemeColor(hTheme, HP_HEADERITEM, 0, TMT_TEXTCOLOR, &(info->headerTextColor));
+                CloseThemeData(hTheme);
             }
-            break;
-            }
-            return DefSubclassProc(hWnd, uMsg, wParam, lParam);
-        },
-        0, reinterpret_cast<DWORD_PTR>(new SubclassInfo{}));
 
-    ListView_SetExtendedListViewStyle(hListView, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_HEADERDRAGDROP);
+            SendMessage(hdr_hwnd, WM_THEMECHANGED, wParam, lParam);
 
-    // Hide focus dots
-    SendMessageW(hListView, WM_CHANGEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
+            RedrawWindow(hWnd, nullptr, nullptr, RDW_FRAME | RDW_INVALIDATE);
+        }
+        break;
+        case WM_DESTROY: {
+            auto info = reinterpret_cast<SubclassInfo *>(dwRefData);
+            delete info;
+        }
+        break;
+        }
+        return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+    };
 
-    SetWindowTheme(hHeader, L"ItemsView", nullptr);   // DarkMode
-    SetWindowTheme(hListView, L"ItemsView", nullptr); // DarkMode
+    SetWindowSubclass(lv_hwnd, subclass, 0, reinterpret_cast<DWORD_PTR>(new SubclassInfo{}));
+
+    // FIXME: We force grid lines off because they look absolutely brutal in dark mode. Maybe we can override them?
+    const auto ex_style = ListView_GetExtendedListViewStyle(lv_hwnd);
+    ListView_SetExtendedListViewStyle(lv_hwnd, ex_style & ~LVS_EX_GRIDLINES);
+
+    // FIXME: Hide focus rectangle because it's white :/ Would be nice to override it instead.
+    SendMessage(lv_hwnd, WM_CHANGEUISTATE, MAKELONG(UIS_SET, UISF_HIDEFOCUS), 0);
+
+    SetWindowTheme(hdr_hwnd, L"ItemsView", nullptr);
+    SetWindowTheme(lv_hwnd, L"ItemsView", nullptr);
 }
 
 inline bool SetDarkThemeColors(HBRUSH &bg_brush, HDC hdc)
@@ -400,6 +401,21 @@ inline bool SetDarkThemeColors(HBRUSH &bg_brush, HDC hdc)
     SetTextColor(hdc, text_color);
     SetBkColor(hdc, bg_color);
     return !!bg_brush;
+}
+
+inline LRESULT CALLBACK wnd_subclass_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR sId,
+                                          DWORD_PTR dwRefData)
+{
+    switch (msg)
+    {
+    case WM_NCDESTROY:
+        RemoveWindowSubclass(hwnd, wnd_subclass_proc, sId);
+        break;
+    default:
+        break;
+    }
+
+    return DefSubclassProc(hwnd, msg, wParam, lParam);
 }
 
 inline LRESULT CALLBACK dlg_subclass_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR sId,
@@ -539,7 +555,10 @@ inline void attach(HWND hwnd)
         },
         0);
 
-    SetWindowSubclass(hwnd, dlg_subclass_proc, 0, 0);
+    if (is_top_level_window(hwnd))
+        SetWindowSubclass(hwnd, wnd_subclass_proc, 0, 0);
+    else
+        SetWindowSubclass(hwnd, dlg_subclass_proc, 0, 0);
 }
 
 } // namespace WinDarkMode
