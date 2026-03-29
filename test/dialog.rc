@@ -1,0 +1,11 @@
+#include "resource.h"
+#include <windows.h>
+
+IDD_MAIN_DIALOG DIALOGEX 0, 0, 200, 80
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "WinDarkMode Test"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LTEXT           "Hello, WinDarkMode!", IDC_STATIC_LABEL, 20, 16, 160, 16
+    DEFPUSHBUTTON   "OK", IDOK, 72, 48, 56, 14
+END
