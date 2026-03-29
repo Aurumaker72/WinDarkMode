@@ -49,6 +49,7 @@
 #include <winerror.h>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 
 #ifndef _UNICODE
