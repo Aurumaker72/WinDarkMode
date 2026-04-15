@@ -6,7 +6,7 @@
 
 # WinDarkMode
 
-Single-header Win32 dark mode library with a sane and modern API surface based on [win32-darkmode](https://github.com/ysc3839/win32-darkmode).
+Single-header Win32 C++ dark mode library with a simple API surface based on [win32-darkmode](https://github.com/ysc3839/win32-darkmode).
 
 ## Why?
 
@@ -59,34 +59,35 @@ For those who are interested, here are some feature milestones:
 
 - Control and library support
   - [ ] Animation
-  - [ ] Button
-  - [ ] ComboBox
-  - [ ] ComboBoxEx
+  - [x] Button
+  - [x] ComboBox
+  - [x] ComboBoxEx
   - [ ] Date and Time Picker
-  - [ ] Edit
+  - [x] Edit
   - [ ] Flat Scroll Bar
-  - [ ] Header Control
+  - [x] Header Control
   - [ ] Hot Key
   - [ ] Image List
   - [ ] IP Address Control
-  - [ ] List Box
-  - [ ] List View
+  - [x] List Box
+  - [x] List View
   - [ ] Month Calendar
   - [ ] Pager
   - [ ] Progress Bar
-  - [ ] Property Sheet
+  - [x] Property Sheet
   - [ ] Rebar
   - [ ] Rich Edit
-  - [ ] Scroll Bar
-  - [ ] Static Control
-  - [ ] Status Bar
+  - [x] Scroll Bar
+  - [x] Static Control
+  - [x] Status Bar
   - [ ] SysLink
-  - [ ] Tab
+  - [x] Tab
   - [ ] Task Dialog
   - [ ] Toolbar
-  - [ ] Tooltip
-  - [ ] Trackbar
-  - [ ] Tree View
-  - [ ] Up-Down Control
+  - [x] Tooltip
+  - [x] Trackbar
+  - [x] Tree View
+  - [x] Up-Down Control
+  - [ ] Menu
 - Automatically react to theme change
 - Allow specifying dark mode syncing behavior: system/force light/force dark
