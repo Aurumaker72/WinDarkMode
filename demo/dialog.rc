@@ -1,0 +1,29 @@
+#include <windows.h>
+#include "resource.h"
+
+
+IDD_MAIN_DIALOG DIALOGEX 0, 0, 380, 230
+STYLE DS_SETFONT | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX
+CAPTION "WinDarkMode Demo"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    GROUPBOX        "Theme",              IDC_STATIC,      8,   6, 102,  70
+    AUTORADIOBUTTON "Light",              IDC_THEME_LIGHT, 16,  22,  88,  12, WS_GROUP | WS_TABSTOP
+    AUTORADIOBUTTON "Dark",               IDC_THEME_DARK,  16,  38,  88,  12
+    AUTORADIOBUTTON "System (follow OS)", IDC_THEME_SYSTEM,16,  54,  88,  12
+
+    AUTOCHECKBOX    "Enable feature",     IDC_CHECK1,       8,  84, 102,  12
+    AUTOCHECKBOX    "Another option",     IDC_CHECK2,       8, 100, 102,  12
+    PUSHBUTTON      "Show Message",       IDC_BUTTON1,      8, 118, 102,  14
+
+    GROUPBOX        "Controls",           IDC_STATIC,     118,   6, 254, 144
+    LTEXT           "Name:",              IDC_STATIC,     126,  24,  36,  10
+    EDITTEXT                              IDC_EDIT1,      164,  22, 200,  14, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "Option:",            IDC_STATIC,     126,  44,  36,  10
+    COMBOBOX                              IDC_COMBO1,     164,  42, 200,  64, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LISTBOX                               IDC_LIST1,      126,  62, 238,  80, LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+
+    CONTROL         "", IDC_TAB1, "SysTabControl32", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_TABSTOP, 8, 158, 364, 62
+END
+
+1 RT_MANIFEST "app.manifest"
