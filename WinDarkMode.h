@@ -194,6 +194,11 @@ struct StatusBarContext
 {
 };
 
+struct ButtonContext
+{
+    bool hot = false;
+};
+
 using fnRtlGetNtVersionNumbers = void(WINAPI *)(LPDWORD major, LPDWORD minor, LPDWORD build);
 using fnSetWindowCompositionAttribute = BOOL(WINAPI *)(HWND hWnd, WINDOWCOMPOSITIONATTRIBDATA *);
 // 1809 17763
@@ -578,6 +583,109 @@ inline LRESULT CALLBACK groupbox_subclass_proc(HWND hwnd, UINT msg, WPARAM wPara
     return DefSubclassProc(hwnd, msg, wParam, lParam);
 }
 
+inline LRESULT CALLBACK button_subclass_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR sId,
+                                             DWORD_PTR dwRefData)
+{
+    auto *ctx = reinterpret_cast<ButtonContext *>(dwRefData);
+    switch (msg)
+    {
+    case WM_NCDESTROY:
+        RemoveWindowSubclass(hwnd, button_subclass_proc, sId);
+        delete ctx;
+        break;
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_MOUSEMOVE:
+        if (!ctx->hot)
+        {
+            ctx->hot = true;
+            TRACKMOUSEEVENT tme = {sizeof(tme), TME_LEAVE, hwnd, 0};
+            TrackMouseEvent(&tme);
+            InvalidateRect(hwnd, nullptr, FALSE);
+        }
+        break;
+    case WM_MOUSELEAVE:
+        ctx->hot = false;
+        InvalidateRect(hwnd, nullptr, FALSE);
+        break;
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        const HDC hdc = BeginPaint(hwnd, &ps);
+
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+
+        FillRect(hdc, &rc, theme_data.bg_brush);
+
+        const auto btn_style = GetWindowLongPtr(hwnd, GWL_STYLE) & 0xFL;
+        const bool is_radio = (btn_style == BS_RADIOBUTTON || btn_style == BS_AUTORADIOBUTTON);
+        const int part = is_radio ? BP_RADIOBUTTON : BP_CHECKBOX;
+
+        const LRESULT check_state = SendMessage(hwnd, BM_GETCHECK, 0, 0);
+        const bool enabled = IsWindowEnabled(hwnd) != 0;
+
+        int state;
+        if (is_radio)
+        {
+            if (!enabled)
+                state = check_state == BST_CHECKED ? RBS_CHECKEDDISABLED : RBS_UNCHECKEDDISABLED;
+            else if (ctx->hot)
+                state = check_state == BST_CHECKED ? RBS_CHECKEDHOT : RBS_UNCHECKEDHOT;
+            else
+                state = check_state == BST_CHECKED ? RBS_CHECKEDNORMAL : RBS_UNCHECKEDNORMAL;
+        }
+        else
+        {
+            if (!enabled)
+                state = check_state == BST_CHECKED         ? CBS_CHECKEDDISABLED
+                        : check_state == BST_INDETERMINATE ? CBS_MIXEDDISABLED
+                                                           : CBS_UNCHECKEDDISABLED;
+            else if (ctx->hot)
+                state = check_state == BST_CHECKED         ? CBS_CHECKEDHOT
+                        : check_state == BST_INDETERMINATE ? CBS_MIXEDHOT
+                                                           : CBS_UNCHECKEDHOT;
+            else
+                state = check_state == BST_CHECKED         ? CBS_CHECKEDNORMAL
+                        : check_state == BST_INDETERMINATE ? CBS_MIXEDNORMAL
+                                                           : CBS_UNCHECKEDNORMAL;
+        }
+
+        HTHEME hTheme = OpenThemeData(hwnd, L"BUTTON");
+        SIZE glyph_size = {GetSystemMetrics(SM_CYMENUCHECK), GetSystemMetrics(SM_CYMENUCHECK)};
+
+        if (hTheme)
+        {
+            SIZE sz = {};
+            if (SUCCEEDED(GetThemePartSize(hTheme, hdc, part, state, nullptr, TS_DRAW, &sz))) glyph_size = sz;
+
+            const int gy = rc.top + (rc.bottom - rc.top - glyph_size.cy) / 2;
+            const RECT glyph_rc = {rc.left, gy, rc.left + glyph_size.cx, gy + glyph_size.cy};
+            DrawThemeBackground(hTheme, hdc, part, state, &glyph_rc, nullptr);
+            CloseThemeData(hTheme);
+        }
+
+        wchar_t label[256] = {};
+        GetWindowText(hwnd, label, _countof(label));
+        if (label[0])
+        {
+            const RECT text_rc = {rc.left + glyph_size.cx + 4, rc.top, rc.right, rc.bottom};
+            const HFONT hFont = reinterpret_cast<HFONT>(SendMessage(hwnd, WM_GETFONT, 0, 0));
+            const HFONT hOldFont = hFont ? reinterpret_cast<HFONT>(SelectObject(hdc, hFont)) : nullptr;
+            SetTextColor(hdc, enabled ? theme_data.text_1_color : theme_data.text_2_color);
+            SetBkMode(hdc, TRANSPARENT);
+            DrawText(hdc, label, -1, const_cast<LPRECT>(&text_rc), DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+            if (hOldFont) SelectObject(hdc, hOldFont);
+        }
+
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    default:
+        break;
+    }
+    return DefSubclassProc(hwnd, msg, wParam, lParam);
+}
+
 inline LRESULT CALLBACK statusbar_subclass_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR sId,
                                                 DWORD_PTR dwRefData)
 {
@@ -814,6 +922,20 @@ inline void update_control(HWND hwnd, bool dark)
             else
                 RemoveWindowSubclass(hwnd, groupbox_subclass_proc, 0);
             return;
+        }
+
+        const bool is_check_or_radio = style == BS_CHECKBOX || style == BS_AUTOCHECKBOX || style == BS_3STATE ||
+                                       style == BS_AUTO3STATE || style == BS_RADIOBUTTON || style == BS_AUTORADIOBUTTON;
+        if (is_check_or_radio)
+        {
+            DWORD_PTR old_data = 0;
+            if (GetWindowSubclass(hwnd, button_subclass_proc, 0, &old_data))
+            {
+                RemoveWindowSubclass(hwnd, button_subclass_proc, 0);
+                delete reinterpret_cast<ButtonContext *>(old_data);
+            }
+            if (dark)
+                SetWindowSubclass(hwnd, button_subclass_proc, 0, reinterpret_cast<DWORD_PTR>(new ButtonContext{}));
         }
     }
 
