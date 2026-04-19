@@ -237,7 +237,7 @@ static INT_PTR CALLBACK DlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         setup_listview(hwnd);
         setup_treeview(hwnd);
 
-        WinDarkMode::attach(hwnd);
+        WinDarkMode::attach(hwnd, { .is_dialog = true });
         reflow(hwnd);
         return TRUE;
     }
