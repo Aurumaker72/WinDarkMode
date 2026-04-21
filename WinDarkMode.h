@@ -273,6 +273,7 @@ inline fnOpenNcThemeData _OpenNcThemeData{};
 inline fnShouldSystemUseDarkMode _ShouldSystemUseDarkMode{};
 inline fnSetPreferredAppMode _SetPreferredAppMode{};
 
+inline HMODULE h_uxtheme{};
 inline ULONG_PTR original_open_nc_theme_data{};
 
 inline Theme theme = Theme::Light;
@@ -1198,9 +1199,6 @@ inline void update_window_theme(HWND hwnd, bool dark)
     update_children(hwnd, dark);
     DrawMenuBar(hwnd);
 
-    const auto prev_brush = (HBRUSH)GetClassLongPtr(hwnd, GCLP_HBRBACKGROUND);
-    if (prev_brush && prev_brush != theme_data.bg_brush && GetObjectType(prev_brush) == OBJ_BRUSH)
-        DeleteObject(prev_brush);
     SetClassLongPtr(hwnd, GCLP_HBRBACKGROUND, (LONG_PTR)theme_data.bg_brush);
 
     RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
@@ -1256,27 +1254,27 @@ inline void init()
     RtlGetNtVersionNumbers(&major, &minor, &build_number);
     build_number &= ~0xF0000000;
 
-    HMODULE h_ut = LoadLibraryEx(L"uxtheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-    if (!h_ut) return;
+    h_uxtheme = LoadLibraryEx(L"uxtheme.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if (!h_uxtheme) return;
 
-    _OpenNcThemeData = reinterpret_cast<fnOpenNcThemeData>(GetProcAddress(h_ut, MAKEINTRESOURCEA(49)));
+    _OpenNcThemeData = reinterpret_cast<fnOpenNcThemeData>(GetProcAddress(h_uxtheme, MAKEINTRESOURCEA(49)));
     _RefreshImmersiveColorPolicyState =
-        reinterpret_cast<fnRefreshImmersiveColorPolicyState>(GetProcAddress(h_ut, MAKEINTRESOURCEA(104)));
+        reinterpret_cast<fnRefreshImmersiveColorPolicyState>(GetProcAddress(h_uxtheme, MAKEINTRESOURCEA(104)));
     _GetIsImmersiveColorUsingHighContrast =
-        reinterpret_cast<fnGetIsImmersiveColorUsingHighContrast>(GetProcAddress(h_ut, MAKEINTRESOURCEA(106)));
-    _ShouldAppsUseDarkMode = reinterpret_cast<fnShouldAppsUseDarkMode>(GetProcAddress(h_ut, MAKEINTRESOURCEA(132)));
-    _AllowDarkModeForWindow = reinterpret_cast<fnAllowDarkModeForWindow>(GetProcAddress(h_ut, MAKEINTRESOURCEA(133)));
+        reinterpret_cast<fnGetIsImmersiveColorUsingHighContrast>(GetProcAddress(h_uxtheme, MAKEINTRESOURCEA(106)));
+    _ShouldAppsUseDarkMode = reinterpret_cast<fnShouldAppsUseDarkMode>(GetProcAddress(h_uxtheme, MAKEINTRESOURCEA(132)));
+    _AllowDarkModeForWindow = reinterpret_cast<fnAllowDarkModeForWindow>(GetProcAddress(h_uxtheme, MAKEINTRESOURCEA(133)));
 
-    _FlushMenuThemes = reinterpret_cast<fnFlushMenuThemes>(GetProcAddress(h_ut, MAKEINTRESOURCEA(136)));
+    _FlushMenuThemes = reinterpret_cast<fnFlushMenuThemes>(GetProcAddress(h_uxtheme, MAKEINTRESOURCEA(136)));
 
-    auto ord135 = GetProcAddress(h_ut, MAKEINTRESOURCEA(135));
+    auto ord135 = GetProcAddress(h_uxtheme, MAKEINTRESOURCEA(135));
     if (build_number < 18362)
         _AllowDarkModeForApp = reinterpret_cast<fnAllowDarkModeForApp>(ord135);
     else
         _SetPreferredAppMode = reinterpret_cast<fnSetPreferredAppMode>(ord135);
 
     _IsDarkModeAllowedForWindow =
-        reinterpret_cast<fnIsDarkModeAllowedForWindow>(GetProcAddress(h_ut, MAKEINTRESOURCEA(137)));
+        reinterpret_cast<fnIsDarkModeAllowedForWindow>(GetProcAddress(h_uxtheme, MAKEINTRESOURCEA(137)));
 
     _SetWindowCompositionAttribute = reinterpret_cast<fnSetWindowCompositionAttribute>(
         GetProcAddress(GetModuleHandle(L"user32.dll"), "SetWindowCompositionAttribute"));
