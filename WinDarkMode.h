@@ -1036,6 +1036,9 @@ inline void update_children(HWND hwnd, bool dark)
         static_cast<LPARAM>(dark));
 }
 
+inline void update_theme_data(bool dark);
+inline void update_window_theme(HWND hwnd, bool dark);
+
 inline LRESULT CALLBACK wnd_subclass_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR sId,
                                           DWORD_PTR dwRefData)
 {
@@ -1043,6 +1046,16 @@ inline LRESULT CALLBACK wnd_subclass_proc(HWND hwnd, UINT msg, WPARAM wParam, LP
     {
     case WM_NCDESTROY:
         RemoveWindowSubclass(hwnd, wnd_subclass_proc, sId);
+        break;
+    case WM_SETTINGCHANGE:
+        if (theme == Theme::System && is_theme_change_message(msg, lParam))
+        {
+            const auto dark = is_dark();
+            update_theme_data(dark);
+            if (_FlushMenuThemes) _FlushMenuThemes();
+            patch_scrollbar(dark);
+            update_window_theme(hwnd, dark);
+        }
         break;
     case WM_NCPAINT: {
         const LRESULT result = DefSubclassProc(hwnd, msg, wParam, lParam);
@@ -1060,12 +1073,8 @@ inline LRESULT CALLBACK wnd_subclass_proc(HWND hwnd, UINT msg, WPARAM wParam, LP
         HDC hdc = GetWindowDC(hwnd);
         if (hdc)
         {
-            RECT rc_sep = {
-                mbi.rcBar.left  - rc_window.left,
-                mbi.rcBar.bottom - rc_window.top,
-                mbi.rcBar.right - rc_window.left,
-                mbi.rcBar.bottom - rc_window.top + 1
-            };
+            RECT rc_sep = {mbi.rcBar.left - rc_window.left, mbi.rcBar.bottom - rc_window.top,
+                           mbi.rcBar.right - rc_window.left, mbi.rcBar.bottom - rc_window.top + 1};
             FillRect(hdc, &rc_sep, theme_data.bg_brush);
             ReleaseDC(hwnd, hdc);
         }
@@ -1238,6 +1247,8 @@ struct AttachOptions
     std::optional<bool> is_dialog = std::nullopt;
 };
 
+inline void set(Theme theme);
+
 /**
  * @brief Initializes dark mode support. Call this once at the start of your program, preferrably in `WinMain` before
  * creating any windows.
@@ -1262,8 +1273,10 @@ inline void init()
         reinterpret_cast<fnRefreshImmersiveColorPolicyState>(GetProcAddress(h_uxtheme, MAKEINTRESOURCEA(104)));
     _GetIsImmersiveColorUsingHighContrast =
         reinterpret_cast<fnGetIsImmersiveColorUsingHighContrast>(GetProcAddress(h_uxtheme, MAKEINTRESOURCEA(106)));
-    _ShouldAppsUseDarkMode = reinterpret_cast<fnShouldAppsUseDarkMode>(GetProcAddress(h_uxtheme, MAKEINTRESOURCEA(132)));
-    _AllowDarkModeForWindow = reinterpret_cast<fnAllowDarkModeForWindow>(GetProcAddress(h_uxtheme, MAKEINTRESOURCEA(133)));
+    _ShouldAppsUseDarkMode =
+        reinterpret_cast<fnShouldAppsUseDarkMode>(GetProcAddress(h_uxtheme, MAKEINTRESOURCEA(132)));
+    _AllowDarkModeForWindow =
+        reinterpret_cast<fnAllowDarkModeForWindow>(GetProcAddress(h_uxtheme, MAKEINTRESOURCEA(133)));
 
     _FlushMenuThemes = reinterpret_cast<fnFlushMenuThemes>(GetProcAddress(h_uxtheme, MAKEINTRESOURCEA(136)));
 
@@ -1302,6 +1315,9 @@ inline void attach(HWND hwnd, const AttachOptions &options = {})
     attached_windows.insert(hwnd);
 
     const auto dark = is_dark();
+    update_theme_data(dark);
+    if (_FlushMenuThemes) _FlushMenuThemes();
+    patch_scrollbar(dark);
     update_window_theme(hwnd, dark);
 
     SetWindowSubclass(hwnd, wnd_subclass_proc, 0, 0);
@@ -1317,7 +1333,6 @@ inline void attach(HWND hwnd, const AttachOptions &options = {})
 inline void set(Theme theme)
 {
     const auto prev_dark = Internal::is_dark();
-
     Internal::theme = theme;
 
     using namespace Internal;
@@ -1327,7 +1342,8 @@ inline void set(Theme theme)
     if (dark != prev_dark) update_theme_data(dark);
 
     if (_AllowDarkModeForApp) _AllowDarkModeForApp(dark);
-    if (_SetPreferredAppMode) _SetPreferredAppMode(dark ? ForceDark : ForceLight);
+    if (_SetPreferredAppMode)
+        _SetPreferredAppMode(theme == Theme::System ? AllowDark : (dark ? ForceDark : ForceLight));
     _RefreshImmersiveColorPolicyState();
     if (_FlushMenuThemes) _FlushMenuThemes();
     patch_scrollbar(dark);
