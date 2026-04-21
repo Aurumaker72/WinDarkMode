@@ -322,7 +322,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nShowCmd)
     InitCommonControlsEx(&icc);
 
     WinDarkMode::init();
-    WinDarkMode::set(WinDarkMode::Theme::System);
 
     HWND hwnd = CreateDialogParamW(hInstance, MAKEINTRESOURCE(IDD_MAIN_DIALOG), nullptr, DlgProc, 0);
 
