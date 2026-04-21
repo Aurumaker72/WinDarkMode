@@ -89,7 +89,7 @@ For those who are interested, here are some feature milestones:
   - [x] Trackbar
   - [x] Tree View
   - [x] Up-Down Control
-  - [ ] Menu Bar
+  - [x] Menu Bar
   - [x] Menu Item
 - Automatically react to theme change
 - Allow specifying dark mode syncing behavior: system/force light/force dark
