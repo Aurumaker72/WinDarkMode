@@ -1332,18 +1332,21 @@ inline void attach(HWND hwnd, const AttachOptions &options = {})
  */
 inline void set(Theme theme)
 {
-    const auto prev_dark = Internal::is_dark();
     Internal::theme = theme;
 
     using namespace Internal;
 
-    const auto dark = is_dark();
-
-    if (dark != prev_dark) update_theme_data(dark);
-
-    if (_AllowDarkModeForApp) _AllowDarkModeForApp(dark);
     if (_SetPreferredAppMode)
-        _SetPreferredAppMode(theme == Theme::System ? AllowDark : (dark ? ForceDark : ForceLight));
+    {
+        if (theme == Theme::System)
+            _SetPreferredAppMode(AllowDark);
+        else
+            _SetPreferredAppMode(theme == Theme::Dark ? ForceDark : ForceLight);
+    }
+
+    const auto dark = is_dark();
+    update_theme_data(dark);
+    if (_AllowDarkModeForApp) _AllowDarkModeForApp(dark);
     _RefreshImmersiveColorPolicyState();
     if (_FlushMenuThemes) _FlushMenuThemes();
     patch_scrollbar(dark);
