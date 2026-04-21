@@ -180,6 +180,52 @@ struct WINDOWCOMPOSITIONATTRIBDATA
     SIZE_T cbData;
 };
 
+static constexpr UINT WDM_UAHDRAWMENU = 0x0091;
+static constexpr UINT WDM_UAHDRAWMENUITEM = 0x0092;
+
+struct UAHMENU
+{
+    HMENU hmenu;
+    HDC hdc;
+    DWORD dwFlags;
+};
+
+struct UAHMENUITEMMETRICS
+{
+    union {
+        struct
+        {
+            DWORD cx;
+            DWORD cy;
+        } rgsizeBar[2];
+        struct
+        {
+            DWORD cx;
+            DWORD cy;
+        } rgsizePopup[4];
+    };
+};
+
+struct UAHMENUPOPUPMETRICS
+{
+    DWORD rgcx[4];
+    DWORD fUpdateMaxWidths : 2;
+};
+
+struct UAHMENUITEM
+{
+    int iPosition;
+    UAHMENUITEMMETRICS umim;
+    UAHMENUPOPUPMETRICS umpm;
+};
+
+struct UAHDRAWMENUITEM
+{
+    DRAWITEMSTRUCT dis;
+    UAHMENU um;
+    UAHMENUITEM umi;
+};
+
 struct ListViewContext
 {
     COLORREF hdr_text_color;
@@ -215,11 +261,11 @@ using fnShouldSystemUseDarkMode = bool(WINAPI *)();                             
 using fnSetPreferredAppMode = PreferredAppMode(WINAPI *)(PreferredAppMode appMode); // ordinal 135, in 1903
 using fnIsDarkModeAllowedForApp = bool(WINAPI *)();                                 // ordinal 139
 
+inline fnFlushMenuThemes _FlushMenuThemes{};
 inline fnSetWindowCompositionAttribute _SetWindowCompositionAttribute{};
 inline fnShouldAppsUseDarkMode _ShouldAppsUseDarkMode{};
 inline fnAllowDarkModeForWindow _AllowDarkModeForWindow{};
 inline fnAllowDarkModeForApp _AllowDarkModeForApp{};
-inline fnFlushMenuThemes _FlushMenuThemes{};
 inline fnRefreshImmersiveColorPolicyState _RefreshImmersiveColorPolicyState{};
 inline fnIsDarkModeAllowedForWindow _IsDarkModeAllowedForWindow{};
 inline fnGetIsImmersiveColorUsingHighContrast _GetIsImmersiveColorUsingHighContrast{};
@@ -1011,6 +1057,52 @@ inline LRESULT CALLBACK wnd_subclass_proc(HWND hwnd, UINT msg, WPARAM wParam, LP
         }
         break;
     default:
+        if (msg == WDM_UAHDRAWMENU)
+        {
+            if (!is_dark()) break;
+            auto *udm = reinterpret_cast<UAHMENU *>(lParam);
+            MENUBARINFO mbi{sizeof(mbi)};
+            if (!GetMenuBarInfo(hwnd, OBJID_MENU, 0, &mbi)) break;
+            RECT rc_win{};
+            GetWindowRect(hwnd, &rc_win);
+            RECT rc_menu = mbi.rcBar;
+            OffsetRect(&rc_menu, -rc_win.left, -rc_win.top);
+            FillRect(udm->hdc, &rc_menu, theme_data.bg_brush);
+            return TRUE;
+        }
+        if (msg == WDM_UAHDRAWMENUITEM)
+        {
+            if (!is_dark()) break;
+            auto *udmi = reinterpret_cast<UAHDRAWMENUITEM *>(lParam);
+
+            const bool hot = (udmi->dis.itemState & ODS_HOTLIGHT) != 0;
+            const bool selected = (udmi->dis.itemState & ODS_SELECTED) != 0;
+
+            FillRect(udmi->um.hdc, &udmi->dis.rcItem,
+                     (hot || selected) ? theme_data.tab_normal_brush : theme_data.bg_brush);
+
+            wchar_t text[256]{};
+            MENUITEMINFOW mii{sizeof(mii)};
+            mii.fMask = MIIM_STRING;
+            mii.dwTypeData = text;
+            mii.cch = static_cast<UINT>(std::size(text));
+            GetMenuItemInfoW(udmi->um.hmenu, static_cast<UINT>(udmi->umi.iPosition), TRUE, &mii);
+
+            NONCLIENTMETRICSW ncm{sizeof(ncm)};
+            SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0);
+            HFONT hFont = CreateFontIndirectW(&ncm.lfMenuFont);
+            HFONT hOldFont = static_cast<HFONT>(SelectObject(udmi->um.hdc, hFont));
+
+            SetBkMode(udmi->um.hdc, TRANSPARENT);
+            SetTextColor(udmi->um.hdc, theme_data.text_1_color);
+            const UINT dt_flags =
+                DT_CENTER | DT_VCENTER | DT_SINGLELINE | ((udmi->dis.itemState & ODS_NOACCEL) ? DT_HIDEPREFIX : 0U);
+            DrawTextW(udmi->um.hdc, text, -1, &udmi->dis.rcItem, dt_flags);
+
+            SelectObject(udmi->um.hdc, hOldFont);
+            DeleteObject(hFont);
+            return TRUE;
+        }
         break;
     }
 
@@ -1077,6 +1169,7 @@ inline void update_window_theme(HWND hwnd, bool dark)
     DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark2, sizeof(dark2));
     refresh_titlebar(hwnd, dark);
     update_children(hwnd, dark);
+    DrawMenuBar(hwnd);
 
     const auto prev_brush = (HBRUSH)GetClassLongPtr(hwnd, GCLP_HBRBACKGROUND);
     if (prev_brush && prev_brush != theme_data.bg_brush && GetObjectType(prev_brush) == OBJ_BRUSH)
@@ -1147,6 +1240,8 @@ inline void init()
     _ShouldAppsUseDarkMode = reinterpret_cast<fnShouldAppsUseDarkMode>(GetProcAddress(h_ut, MAKEINTRESOURCEA(132)));
     _AllowDarkModeForWindow = reinterpret_cast<fnAllowDarkModeForWindow>(GetProcAddress(h_ut, MAKEINTRESOURCEA(133)));
 
+    _FlushMenuThemes = reinterpret_cast<fnFlushMenuThemes>(GetProcAddress(h_ut, MAKEINTRESOURCEA(136)));
+
     auto ord135 = GetProcAddress(h_ut, MAKEINTRESOURCEA(135));
     if (build_number < 18362)
         _AllowDarkModeForApp = reinterpret_cast<fnAllowDarkModeForApp>(ord135);
@@ -1209,6 +1304,7 @@ inline void set(Theme theme)
     if (_AllowDarkModeForApp) _AllowDarkModeForApp(dark);
     if (_SetPreferredAppMode) _SetPreferredAppMode(dark ? ForceDark : ForceLight);
     _RefreshImmersiveColorPolicyState();
+    if (_FlushMenuThemes) _FlushMenuThemes();
     patch_scrollbar(dark);
 
     for (const auto &hwnd : attached_windows)
