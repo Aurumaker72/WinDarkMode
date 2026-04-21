@@ -1043,6 +1043,33 @@ inline LRESULT CALLBACK wnd_subclass_proc(HWND hwnd, UINT msg, WPARAM wParam, LP
     case WM_NCDESTROY:
         RemoveWindowSubclass(hwnd, wnd_subclass_proc, sId);
         break;
+    case WM_NCPAINT: {
+        const LRESULT result = DefSubclassProc(hwnd, msg, wParam, lParam);
+        if (!is_dark()) return result;
+
+        HMENU hMenu = GetMenu(hwnd);
+        if (!hMenu) return result;
+
+        MENUBARINFO mbi{sizeof(mbi)};
+        if (!GetMenuBarInfo(hwnd, OBJID_MENU, 0, &mbi)) return result;
+
+        RECT rc_window{};
+        GetWindowRect(hwnd, &rc_window);
+
+        HDC hdc = GetWindowDC(hwnd);
+        if (hdc)
+        {
+            RECT rc_sep = {
+                mbi.rcBar.left  - rc_window.left,
+                mbi.rcBar.bottom - rc_window.top,
+                mbi.rcBar.right - rc_window.left,
+                mbi.rcBar.bottom - rc_window.top + 1
+            };
+            FillRect(hdc, &rc_sep, theme_data.bg_brush);
+            ReleaseDC(hwnd, hdc);
+        }
+        return result;
+    }
     case WM_PARENTNOTIFY:
         switch (LOWORD(wParam))
         {
