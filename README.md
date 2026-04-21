@@ -1,6 +1,6 @@
 > [!WARNING]
-> This library is not production-ready.
-> It's lacking essential functionality, but it's also being worked on actively.
+> This library is still in its alpha stage.
+> While not lacking functionality required for most apps, it's still missing some polish.
 > 
 > Check back later!
 
